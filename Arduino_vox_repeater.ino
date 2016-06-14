@@ -18,14 +18,6 @@
 //PTT OUT (for TX)   - Digital Pin
 #define radioB_pttPin 13
 
-//define if PTT TxX is enabled
-#define enableTxA true
-#define enableTxB true
-
-//define if EOT ID is enabled
-//#define eotIdA false
-//#define eotIdB false
-
 //define if auto ID is enabled
 #define autoIdA true
 #define autoIdB true
@@ -41,14 +33,14 @@
 #define devVal 4
 
 //morse code "dit" base unit length in milliseconds
-#define ditLen 75
+#define ditLen 60
 
 //this stores the last time it ID'd
 long lastIdA=idTimeout;
 long lastIdB=idTimeout;
 
 //stores the time of the last transmission for VOX delay
-long last=0;
+long lastVoxTime=0;
 
 void setup() {
   pinMode(radioA_micPin,OUTPUT);
@@ -65,17 +57,20 @@ void setup() {
 }
 
 void loop()
-{
-  if(enableTxA && autoIdA)
-    autoId(radioA_micPin,radioA_pttPin,lastIdA);
-  if(enableTxA && autoIdB)
-    autoId(radioB_micPin,radioB_pttPin,lastIdB);
-  
-  if(enableTxA && !isBusy(radioB_pttPin))
-    vox(radioA_voxPin, radioA_pttPin, last);
+{  
+  if(!isBusy(radioB_pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up
+  {
+    if(autoIdA)
+      autoId(radioA_micPin,radioA_pttPin,lastIdA);
+    vox(radioA_voxPin, radioA_pttPin, lastVoxTime);
+  }
     
-  if(enableTxB && !isBusy(radioA_pttPin))
-    vox(radioB_voxPin, radioB_pttPin, last);
+  if(!isBusy(radioA_pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up 
+  {
+    if(autoIdB)
+      autoId(radioB_micPin,radioB_pttPin,lastIdB);
+    vox(radioB_voxPin, radioB_pttPin, lastVoxTime);
+  }
 }
 
 boolean isBusy(int pttPin)
@@ -83,7 +78,8 @@ boolean isBusy(int pttPin)
   return digitalRead(pttPin);
 }
 
-void vox(int voxPin,int pttPin,long & last)
+
+void vox(int voxPin,int pttPin,long & lastVoxTime)
 {
   // read the input on analog pins
   int voxVal = analogRead(voxPin);
@@ -93,64 +89,196 @@ void vox(int voxPin,int pttPin,long & last)
   {
     //vox active
     digitalWrite(pttPin,HIGH);
-    last=millis();
+    lastVoxTime=millis();
   }
   else
   {
-    if(millis()-last < 500)
+    if(millis()-lastVoxTime < 500)
     {
       //vox delay
     }
     else
     {
       digitalWrite(pttPin,LOW);
-      Serial.println();
     }
   }
 }
 
 
-void autoId(int micPin,int pttPin, long & time)
+void autoId(int micPin,int pttPin, long & lastIdTime)
 {
-  if((millis()-time) > idTimeout)
+  if((millis()-lastIdTime) > idTimeout)
   {
     boolean tx=digitalRead(pttPin);
     digitalWrite(pttPin,HIGH);
     delay(500);
-    kk4nde(micPin);
-    time=millis();
+    //kk4nde(micPin);
+    morseCode(micPin,"kk4nde");
+    lastIdTime=millis();
     digitalWrite(pttPin,tx);
   }
 }
 
 
-void kk4nde(int codePin) {
-  //-.- -.- ....- -. -.. . 
-  dah(codePin); dit(codePin); dah(codePin); next();
-  dah(codePin); dit(codePin); dah(codePin); next();
-  dit(codePin); dit(codePin); dit(codePin); dit(codePin); dah(codePin); next();
-  dah(codePin); dit(codePin); next();
-  dah(codePin); dit(codePin); dit(codePin); next();
-  dit(codePin); next();
-}
-
-void dit(int codePin)
+void morseCode(int codePin, String message)
 {
-  tone(codePin,600);
-  delay(ditLen);
-  noTone(codePin);
-  delay(ditLen);
-}
+  // message.trim();
+  message.toLowerCase();
+  String temp="";
+   for(int x=0; x < message.length(); x++)
+   {
+     char c = message[x];
+     switch(message[x])
+     {
+       case 'a':
+                 temp=".-";
+                 break;
+       case 'b':
+                 temp="-...";
+                 break;
+       case 'c':
+                 temp="-.-.";
+                 break;
+       case 'd':
+                 temp="-..";
+                 break;
+       case 'e':
+                 temp=".";
+                 break;
+       case 'f':
+                 temp="..-.";
+                 break;
+       case 'g':
+                 temp="--.";
+                 break;
+       case 'h':
+                 temp="....";
+                 break;
+       case 'i':
+                 temp="..";
+                 break;
+       case 'j':
+                 temp=".---";
+                 break;
+       case 'k':
+                 temp="-.-";
+                 break;
+       case 'l':
+                 temp=".-..";
+                 break;
+       case 'm':
+                 temp="--";
+                 break;
+       case 'n':
+                 temp="-.";
+                 break;
+       case 'o':
+                 temp="---";
+                 break;
+       case 'p':
+                 temp=".--.";
+                 break;
+       case 'q':
+                 temp="--.-";
+                 break;
+       case 'r':
+                 temp=".-.";
+                 break;
+       case 's':
+                 temp="...";
+                 break;
+       case 't':
+                 temp="-";
+                 break;
+       case 'u':
+                 temp="..-";
+                 break;
+       case 'v':
+                 temp="...-";
+                 break;
+       case 'w':
+                 temp=".--";
+                 break;
+       case 'x':
+                 temp="-..-";
+                 break;
+       case 'y':
+                 temp="-.--";
+                 break;
+       case 'z':
+                 temp="--..";
+                 break;
+       case '0':
+                 temp="-----";
+                 break;
+       case '1':
+                 temp=".----";
+                 break;
+       case '2':
+                 temp="..---";
+                 break;
+       case '3':
+                 temp="...--";
+                 break;
+       case '4':
+                 temp="....-";
+                 break;
+       case '5':
+                 temp=".....";
+                 break;
+       case '6':
+                 temp="-....";
+                 break;
+       case '7':
+                 temp="--...";
+                 break;
+       case '8':
+                 temp="---..";
+                 break;
+       case '9':
+                 temp="----.";
+                 break;
+       case ' ':
+                 temp="";
+                 delay(3*ditLen);
+                 break;
+       case '.':
+                 temp=".-.-.-";
+                 break;
+       case '/':
+                 temp="-..-.";
+                 break;
+       case '-':
+                 temp="-....-";
+                 break;
+       case '?':
+                 temp="..--..";
+                 break;
+       default:
+                 temp="";
+                 break;
+     }
+     
+     for(int y=0; y < temp.length(); y++)
+     {
+       switch(temp[y])
+       {
+       case '.':
+                 tone(codePin,600);
+                 delay(ditLen);
+                 noTone(codePin);
+                 delay(ditLen);
+                 break;
+       case '-':
+                 tone(codePin,600);
+                 delay(3*ditLen);
+                 noTone(codePin);
+                 delay(ditLen);
+                 break;
+       default:
+                 break;
+       }
+     }
 
-void dah(int codePin)
-{
-  tone(codePin,600);
-  delay(3*ditLen);
-  noTone(codePin);
-  delay(ditLen);
-}
-
-void next()
-{
-  delay(3*ditLen);
+   }
 }
