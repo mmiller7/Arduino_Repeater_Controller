@@ -18,9 +18,19 @@
 //PTT OUT (for TX)   - Digital Pin
 #define radioB_pttPin 13
 
+//Analog pin for voltage sense
+#define voltSensePin 2
+
 //define if auto ID is enabled
 #define autoIdA true
-#define autoIdB true
+#define autoIdB false
+
+//define
+#define battMonA true
+#define battMonB false
+
+//define threshold for low battery
+#define lowBattThreshold 11.5
 
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
@@ -52,14 +62,18 @@ void setup() {
   digitalWrite(radioB_micPin,LOW);
   digitalWrite(radioB_pttPin,LOW);
 
-  autoId(radioA_micPin,radioA_pttPin,lastIdA);
-  autoId(radioB_micPin,radioB_pttPin,lastIdB);
+  if(autoIdA)
+    autoId(radioA_micPin,radioA_pttPin,lastIdA);
+  if(autoIdB)
+    autoId(radioB_micPin,radioB_pttPin,lastIdB);
 }
 
 void loop()
-{  
+{
   if(!isBusy(radioB_pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up
   {
+    if(battMonA)
+      lowBattCheck(radioA_micPin,radioA_pttPin);
     if(autoIdA)
       autoId(radioA_micPin,radioA_pttPin,lastIdA);
     vox(radioA_voxPin, radioA_pttPin, lastVoxTime);
@@ -67,6 +81,8 @@ void loop()
     
   if(!isBusy(radioA_pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up 
   {
+    if(battMonB)
+      lowBattCheck(radioB_micPin,radioB_pttPin);
     if(autoIdB)
       autoId(radioB_micPin,radioB_pttPin,lastIdB);
     vox(radioB_voxPin, radioB_pttPin, lastVoxTime);
@@ -115,6 +131,19 @@ void autoId(int micPin,int pttPin, long & lastIdTime)
     //kk4nde(micPin);
     morseCode(micPin,"kk4nde");
     lastIdTime=millis();
+    digitalWrite(pttPin,tx);
+  }
+}
+
+void lowBattCheck(int micPin,int pttPin)
+{
+  int voltage=getPowerVoltage(voltSensePin);
+  if(voltage < lowBattThreshold)
+  {
+    boolean tx=digitalRead(pttPin);
+    digitalWrite(pttPin,HIGH);
+    delay(500);
+    morseCode(micPin,"lb "+ String(voltage) + " v  ");
     digitalWrite(pttPin,tx);
   }
 }
@@ -279,6 +308,16 @@ void morseCode(int codePin, String message)
                  break;
        }
      }
-
+     delay(ditLen);
    }
+}
+
+float getPowerVoltage(int pin)
+{
+  // R1 = 2200 (Vin to midpoint)
+  // R2 = 1000 (midpoint to gnd)
+  // put 5.1v protectioin zener in parallel for R2 to protect arduino input against overvolt
+  // formula:
+  //     ( value/1023 * (arduino vcc) ) / (  R2   /     (R2 + R1)    ) + (Vin diode drop)
+  return ((analogRead(pin)/1023.0)*5.0) / (1000.0 / (2200.0 + 1000.0)) + 0.76 ;
 }
