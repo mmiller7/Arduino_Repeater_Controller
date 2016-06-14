@@ -1,7 +1,6 @@
 //Matthew Miller
 //12-March-2013
 
-
 //Analog pin for voltage sense
 #define voltSensePin 2
 
@@ -143,13 +142,13 @@ void txAutoId(Radio &radio)
 void lowBattCheck(Radio &radio)
 {
   float voltage=getPowerVoltage(voltSensePin);
-  if(radio.battMon && voltage < lowBattThreshold && (millis()-radio.lastBattMonTime) > idTimeout)
+  if(radio.battMon && voltage < lowBattThreshold && voltage > 5.5 && (millis()-radio.lastBattMonTime) > idTimeout)
   {
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
-    //morseCode(radio.micPin,"lb "+ toString(voltage) + " v  ");
-    morseCode(radio.micPin,"l batt");
+    morseCode(radio.micPin,"lb "+ toString(voltage) + "v");
+    //morseCode(radio.micPin,"l batt");
     radio.lastBattMonTime=millis();
     digitalWrite(radio.pttPin,tx);
   }
@@ -157,151 +156,161 @@ void lowBattCheck(Radio &radio)
 
 String toString(float input)
 {
-  int first=(int)input;
-  int last=(int)((input-first)*100);
-  return String(first)+"."+String(last);
+  String result="";
+  if(input > 10)
+  {
+    result+='1';
+    input-=10;
+  }
+  result+=(char)((int)input+48); //add 48 to shift to ascii value
+  input-=(int)input;
+  result+='.';
+  input*=10;
+  if((input-(int)input)>.4) //round (because here we will drop everything after decimal)
+    input++;
+  result+=(char)((int)input+48); //add 48 to shift to ascii value
+  return result;
 }
 
 void morseCode(int codePin, String message)
 {
   // message.trim();
   message.toLowerCase();
-  String temp="";
-   for(int x=0; x < message.length(); x++)
+  char temp[6];
+   for(unsigned int x=0; x < message.length(); x++)
    {
-     char c = message[x];
      switch(message[x])
      {
        case 'a':
-                 temp=".-";
+                 strcpy(temp,".-");
                  break;
        case 'b':
-                 temp="-...";
+                 strcpy(temp,"-...");
                  break;
        case 'c':
-                 temp="-.-.";
+                 strcpy(temp,"-.-.");
                  break;
        case 'd':
-                 temp="-..";
+                 strcpy(temp,"-..");
                  break;
        case 'e':
-                 temp=".";
+                 strcpy(temp,".");
                  break;
        case 'f':
-                 temp="..-.";
+                 strcpy(temp,"..-.");
                  break;
        case 'g':
-                 temp="--.";
+                 strcpy(temp,"--.");
                  break;
        case 'h':
-                 temp="....";
+                 strcpy(temp,"....");
                  break;
        case 'i':
-                 temp="..";
+                 strcpy(temp,"..");
                  break;
        case 'j':
-                 temp=".---";
+                 strcpy(temp,".---");
                  break;
        case 'k':
-                 temp="-.-";
+                 strcpy(temp,"-.-");
                  break;
        case 'l':
-                 temp=".-..";
+                 strcpy(temp,".-..");
                  break;
        case 'm':
-                 temp="--";
+                 strcpy(temp,"--");
                  break;
        case 'n':
-                 temp="-.";
+                 strcpy(temp,"-.");
                  break;
        case 'o':
-                 temp="---";
+                 strcpy(temp,"---");
                  break;
        case 'p':
-                 temp=".--.";
+                 strcpy(temp,".--.");
                  break;
        case 'q':
-                 temp="--.-";
+                 strcpy(temp,"--.-");
                  break;
        case 'r':
-                 temp=".-.";
+                 strcpy(temp,".-.");
                  break;
        case 's':
-                 temp="...";
+                 strcpy(temp,"...");
                  break;
        case 't':
-                 temp="-";
+                 strcpy(temp,"-");
                  break;
        case 'u':
-                 temp="..-";
+                 strcpy(temp,"..-");
                  break;
        case 'v':
-                 temp="...-";
+                 strcpy(temp,"...-");
                  break;
        case 'w':
-                 temp=".--";
+                 strcpy(temp,".--");
                  break;
        case 'x':
-                 temp="-..-";
+                 strcpy(temp,"-..-");
                  break;
        case 'y':
-                 temp="-.--";
+                 strcpy(temp,"-.--");
                  break;
        case 'z':
-                 temp="--..";
+                 strcpy(temp,"--..");
                  break;
        case '0':
-                 temp="-----";
+                 strcpy(temp,"-----");
                  break;
        case '1':
-                 temp=".----";
+                 strcpy(temp,".----");
                  break;
        case '2':
-                 temp="..---";
+                 strcpy(temp,"..---");
                  break;
        case '3':
-                 temp="...--";
+                 strcpy(temp,"...--");
                  break;
        case '4':
-                 temp="....-";
+                 strcpy(temp,"....-");
                  break;
        case '5':
-                 temp=".....";
+                 strcpy(temp,".....");
                  break;
        case '6':
-                 temp="-....";
+                 strcpy(temp,"-....");
                  break;
        case '7':
-                 temp="--...";
+                 strcpy(temp,"--...");
                  break;
        case '8':
-                 temp="---..";
+                 strcpy(temp,"---..");
                  break;
        case '9':
-                 temp="----.";
+                 strcpy(temp,"----.");
                  break;
        case ' ':
-                 temp="";
+                 strcpy(temp,"");
                  delay(7*ditLen);
                  break;
        case '.':
-                 temp=".-.-.-";
+                 strcpy(temp,".-.-.-");
                  break;
        case '/':
-                 temp="-..-.";
+                 strcpy(temp,"-..-.");
                  break;
        case '-':
-                 temp="-....-";
+                 strcpy(temp,"-....-");
                  break;
        case '?':
-                 temp="..--..";
+                 strcpy(temp,"..--..");
                  break;
        default:
-                 temp="";
+                 strcpy(temp,"");
                  break;
      }
      
-     for(int y=0; y < temp.length(); y++)
+     for(unsigned int y=0; y < strlen(temp); y++)
      {
        switch(temp[y])
        {
