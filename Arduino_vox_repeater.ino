@@ -1,11 +1,60 @@
 //Matthew Miller
-//12-March-2013
+//24-March-2013
+
+/*
+Arduino pins
+#define voltSensePin 2
+  //set config for radio A
+  radioA.voxPin=0;
+  radioA.micPin=2;
+  radioA.pttPin=3;
+  radioA.autoId=true;
+  radioA.battMon=true;
+  radioA.lastBattMonTime=idTimeout;
+  radioA.lastIdTime=idTimeout;
+  radioA.lastVoxTime=0;
+
+  //set config for radio B  
+  radioB.voxPin=1;
+  radioB.micPin=12;
+  radioB.pttPin=13;
+  radioB.autoId=false;
+  radioB.battMon=false;
+  radioB.lastBattMonTime=idTimeout;
+  radioB.lastIdTime=idTimeout;
+  radioB.lastVoxTime=0;
+
+ATTiny84 pins
+#define voltSensePin 4
+  //set config for radio A
+  radioA.voxPin=2;
+  radioA.micPin=7;
+  radioA.pttPin=0;
+  radioA.autoId=true;  //0
+  radioA.battMon=false; //1
+  radioA.lastBattMonTime=idTimeout;
+  radioA.lastIdTime=idTimeout;
+  radioA.lastVoxTime=0;
+
+  //set config for radio B
+  radioB.voxPin=1;
+  radioB.micPin=10;
+  radioB.pttPin=1;
+  radioB.autoId=true;  //2
+  radioB.battMon=true; //3
+  radioB.lastBattMonTime=idTimeout;
+  radioB.lastIdTime=idTimeout;
+  radioB.lastVoxTime=0;
+*/
 
 //Analog pin for voltage sense
-#define voltSensePin 2
+#define voltSensePin 6
 
 //define threshold for low battery
 #define lowBattThreshold 11.5
+
+//define threshold below which low battery is not triggered
+#define lowNotifyFloor 9.5
 
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
@@ -16,6 +65,9 @@
 
 //define deviation to activate VOX
 #define devVal 4
+
+//define delay for VOX hold
+#define voxDelay 1000
 
 //morse code "dit" base unit length in milliseconds
 #define ditLen 60
@@ -29,45 +81,54 @@ struct Radio
   //voxPin - Audio In (for VOX) - Analog Pin
   //micPin - MIC Mix (for tone) - Digital Pin
   //pttPin - PTT OUT (for TX)   - Digital Pin
-  int micPin, pttPin, voxPin;
-  boolean autoId, battMon;
+  int micPin, pttPin, voxPin, autoId, battMon;
   long lastBattMonTime, lastIdTime, lastVoxTime;
 };
 
+//globals to store radio config
 Radio radioA, radioB;
 
+//declarations for functions which use radio struct
 void configure(Radio &radio);
 void vox(Radio &radio);
 void txAutoId(Radio &radio);
 void lowBattCheck(Radio &radio);
+boolean isBusy(Radio &radio);
 
 void setup() {
   
-  radioA.voxPin=0;
-  radioA.micPin=2;
-  radioA.pttPin=3;
-  radioA.autoId=true;
-  radioA.battMon=true;
+  //set config for radio A
+  radioA.voxPin=2;
+  radioA.micPin=7;
+  radioA.pttPin=0;
+  radioA.autoId=true;  //0
+  radioA.battMon=false; //1
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastVoxTime=0;
-  
+
+  //set config for radio B
   radioB.voxPin=1;
-  radioB.micPin=12;
-  radioB.pttPin=13;
-  radioB.autoId=false;
-  radioB.battMon=false;
+  radioB.micPin=10;
+  radioB.pttPin=1;
+  radioB.autoId=true;  //2
+  radioB.battMon=true; //3
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastVoxTime=0;
   
+  //apply config for radios (set pinmode/etc)
   configure(radioA);
   configure(radioB);
   
+ morseCode(radioA.micPin,"@%");
+  
+  //broadcast ID if applicable
   txAutoId(radioA);
   txAutoId(radioB);
 }
 
+//configures pinmode and setup for radio
 void configure(Radio &radio)
 {
   pinMode(radio.micPin,OUTPUT);
@@ -78,14 +139,14 @@ void configure(Radio &radio)
 
 void loop()
 {
-  if(!isBusy(radioB.pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up
+  if(!isBusy(radioB)) //if the other radio is transmitting, this one must be receiving so don't key up
   {
     lowBattCheck(radioA);
     txAutoId(radioA);
     vox(radioA);
   }
     
-  if(!isBusy(radioA.pttPin)) //if the other radio is transmitting, this one must be receiving so don't key up 
+  if(!isBusy(radioA)) //if the other radio is transmitting, this one must be receiving so don't key up 
   {
     lowBattCheck(radioB);
     txAutoId(radioB);
@@ -93,12 +154,20 @@ void loop()
   }
 }
 
-boolean isBusy(int pttPin)
+//checks if a radio's PTT pin is keyed
+boolean isBusy(Radio &radio)
 {
-  return digitalRead(pttPin);
+  return digitalRead(radio.pttPin);
 }
 
+//checks if feature is enabled (if pin is true/false)
+boolean isEnabled(int pin)
+{
+  return pin; //temp just return true/false coded
+  //return digitalRead(pin);
+}
 
+//trigger PTT based on VOX input and delay
 void vox(Radio &radio)
 {
   // read the input on analog pins
@@ -113,7 +182,7 @@ void vox(Radio &radio)
   }
   else
   {
-    if(millis()-radio.lastVoxTime < 500)
+    if(millis()-radio.lastVoxTime < voxDelay)
     {
       //vox delay
     }
@@ -124,10 +193,10 @@ void vox(Radio &radio)
   }
 }
 
-
+//broadcast ID if applicable
 void txAutoId(Radio &radio)
 {
-  if(radio.autoId && (millis()-radio.lastIdTime) > idTimeout)
+  if(isEnabled(radio.autoId) && (millis()-radio.lastIdTime) > idTimeout)
   {
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
@@ -139,47 +208,63 @@ void txAutoId(Radio &radio)
   }
 }
 
+//broadcast low battery if applicable
 void lowBattCheck(Radio &radio)
 {
   float voltage=getPowerVoltage(voltSensePin);
-  if(radio.battMon && voltage < lowBattThreshold && voltage > 5.5 && (millis()-radio.lastBattMonTime) > idTimeout)
+  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
   {
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
-    morseCode(radio.micPin,"lb "+ toString(voltage) + "v");
-    //morseCode(radio.micPin,"l batt");
+    
+    //encode low battery morse code message
+//    char temp[]="lb ";
+//    strcat(temp,voltage);
+//    strcat(temp,"v");
+//    morseCode(radio.micPin,temp);
+    morseCode(radio.micPin,"lb");
+    //morseCode(radio.micPin,"lb "+ toString(voltage) + "v");
+    
     radio.lastBattMonTime=millis();
     digitalWrite(radio.pttPin,tx);
   }
 }
 
-String toString(float input)
+//for floats from ~1 to ~19
+void strcat(char * appendTo, float input)
 {
-  String result="";
+  char temp[]="x";
   if(input > 10)
   {
-    result+='1';
+    strcat(appendTo,"1");
     input-=10;
   }
-  result+=(char)((int)input+48); //add 48 to shift to ascii value
-  input-=(int)input;
-  result+='.';
-  input*=10;
+  temp[0]=(char)((int)input+48); //add 48 to shift to ascii value
+  strcat(appendTo,temp); //append to output
+  input-=(int)input; //take off whole value
+  strcat(appendTo,".");
+  input*=10; //iterate to first place past decimal
   if((input-(int)input)>.4) //round (because here we will drop everything after decimal)
     input++;
-  result+=(char)((int)input+48); //add 48 to shift to ascii value
-  return result;
+  temp[0]=(char)((int)input+48); //add 48 to shift to ascii value
+  strcat(appendTo,temp); //append to output
 }
 
-void morseCode(int codePin, String message)
+//send morse code message by applying tone to codePin
+void morseCode(int codePin, char* message)
 {
   // message.trim();
-  message.toLowerCase();
+  //message.toLowerCase();
   int code;
   int length;
-   for(unsigned int x=0; x < message.length(); x++)
+   for(unsigned int x=0; x < strlen(message); x++)
    {
+     //shift case
+     if(message[x] < 91 && message[x] > 64)
+       message[x]+=32;
+       
+     //encode morse code
      switch(message[x])
      {
        case 'a':
@@ -380,13 +465,21 @@ void morseCode(int codePin, String message)
                  break;
        case '-':
                  //strcpy(temp,"-....-");
-                 code=B10001;
+                 code=B100001;
                  length=6;
                  break;
        case '?':
                  //strcpy(temp,"..--..");
                  code=B001100;
                  length=6;
+                 break;
+       case '@': //debug symbol
+                 code=analogRead(radioA.voxPin)/4;
+                 length=8;
+                 break;
+       case '%': //debug symbol
+                 code=analogRead(radioB.voxPin)/4;
+                 length=8;
                  break;
        default:
                  //strcpy(temp,"");
@@ -395,30 +488,32 @@ void morseCode(int codePin, String message)
                  break;
      }
      
-     while(length != 0)
+     while(length > 0)
      {
+       //determine if it's a dit or a dot
        if(code & bitMask(length))
        {
-                 tone(codePin,tonePitch);
-                 delay(3*ditLen);
-                 noTone(codePin);
-                 delay(ditLen);
+         //1 is a dit
+         tone(codePin,tonePitch);
+         delay(3*ditLen);
+         noTone(codePin);
+         delay(ditLen);
        }
        else
        {
-                 tone(codePin,tonePitch);
-                 delay(ditLen);
-                 noTone(codePin);
-                 delay(ditLen);
-                 break;
+         //0 is a dot
+         tone(codePin,tonePitch);
+         delay(ditLen);
+         noTone(codePin);
+         delay(ditLen);
        }
        length--;
      }
      delay(ditLen);
    }
-   delay(7*ditLen);
 }
 
+//generates a "bit mask" for getting nth bit from int
 int bitMask(int bitNumber)
 {
   int value=1;
@@ -427,6 +522,7 @@ int bitMask(int bitNumber)
   return value;
 }
 
+//gets voltage from analog input pin
 float getPowerVoltage(int pin)
 {
   // R1 = 2200 (Vin to midpoint)
