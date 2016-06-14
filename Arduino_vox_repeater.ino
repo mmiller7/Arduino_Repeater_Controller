@@ -1,6 +1,13 @@
+//VOX sensing bi-directional repeater for Arduino
 //Matthew Miller
+//KK4NDE
 //24-March-2013
 
+//Here are some common pins you may want to use depending on if you have an Arduino or ATTINY
+//configure the #define at the beginning of the code
+//configure the radioA.value radioB.value lines in the setup() function
+//NOTE: voltSensePin, radioA.voxPin, and radioB.voxPin should be ANALOG inputs
+//if you don't want to use the voltSensePin just tie that pin to +V and it will always assume the battery is full
 /*
 Arduino pins
 #define voltSensePin 2
@@ -27,46 +34,58 @@ Arduino pins
 ATTiny84 pins
 #define voltSensePin 4
   //set config for radio A
-  radioA.voxPin=10;
-  radioA.micPin=9;
-  radioA.pttPin=8;
+  radioA.voxPin=2;
+  radioA.micPin=7;
+  radioA.pttPin=0;
   radioA.autoId=true;  //0
-  radioA.battMon=true; //1
+  radioA.battMon=false; //1
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastVoxTime=0;
 
-  //set config for radio B  
-  radioB.voxPin=7;
-  radioB.micPin=6;
-  radioB.pttPin=5;
-  radioB.autoId=false;  //2
-  radioB.battMon=false; //3
+  //set config for radio B
+  radioB.voxPin=1;
+  radioB.micPin=10;
+  radioB.pttPin=1;
+  radioB.autoId=true;  //2
+  radioB.battMon=true; //3
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastVoxTime=0;
 */
 
+//Callsign to ID with, use lowercase only
+#define CALLSIGN "xx0xxx"
+
 //Analog pin for voltage sense
-#define voltSensePin 4
+#define voltSensePin 6
 
 //define threshold for low battery
 #define lowBattThreshold 11.5
+
+//define threshold below which low battery is not triggered
+#define lowNotifyFloor 9.5
 
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
 #define idTimeout 600000
 
 //define input value for no-audio
+//this should probably be near 512 but will vary depending on your voltage devider
+//that is used for buffering the voxPin input
 #define normVal 511
 
 //define deviation to activate VOX
+//smaller values activate sooner, larger values require more audio variation to trigger
 #define devVal 4
+
+//define delay for VOX hold over in milliseconds
+#define voxDelay 1000
 
 //morse code "dit" base unit length in milliseconds
 #define ditLen 60
 
-//the pitch for the tone
+//the pitch for the dit/dah tone used by the ID
 #define tonePitch 800
 
 //data structure for radio info
@@ -91,21 +110,26 @@ boolean isBusy(Radio &radio);
 
 void setup() {
   
-  radioA.voxPin=5;
-  radioA.micPin=8;
-  radioA.pttPin=9;
-  radioA.autoId=true;  //0
-  radioA.battMon=true; //1
+  /******************************************************
+  ** Configure radio connection pins and settings here **
+  ******************************************************/
+  
+  //set config for radio A
+  radioA.voxPin=2;
+  radioA.micPin=7;
+  radioA.pttPin=0;
+  radioA.autoId=true;
+  radioA.battMon=false;
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastVoxTime=0;
 
   //set config for radio B
-  radioB.voxPin=6;
-  radioB.micPin=7;
-  radioB.pttPin=3;
-  radioB.autoId=false;  //2
-  radioB.battMon=false; //3
+  radioB.voxPin=1;
+  radioB.micPin=10;
+  radioB.pttPin=1;
+  radioB.autoId=true;
+  radioB.battMon=true;
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastVoxTime=0;
@@ -114,7 +138,21 @@ void setup() {
   configure(radioA);
   configure(radioB);
   
- morseCode(radioA.micPin,"@%");
+  //This line is for debugging on ATTINY without eating memory and resources nor
+  //requiring a serial console.  Use Serial.print for Arduino Uno instead.
+  //When uncommented, it will use the radioA output to beep out the values
+  //devided by 4 that are detected on voxPin on radioA followed by voxPin on radioB
+  //encoded in binary -- such that dit is 0 dah is 1
+  //the value is one byte long and should be multiplied by 4 to get the proper value
+  //to set for the #define normValue
+  //example, ..------..-----.
+  //         0111111110000000
+  //         \__127_/\__128_/
+  //          x4=508  x4=512
+  //          radioA "no sound" vox pin value is about 508
+  //          radioB "no sound" vox pin is about 512
+  
+  //morseCode(radioA.micPin,"@%");
   
   //broadcast ID if applicable
   txAutoId(radioA);
@@ -175,7 +213,7 @@ void vox(Radio &radio)
   }
   else
   {
-    if(millis()-radio.lastVoxTime < 500)
+    if(millis()-radio.lastVoxTime < voxDelay)
     {
       //vox delay
     }
@@ -184,7 +222,6 @@ void vox(Radio &radio)
       digitalWrite(radio.pttPin,LOW);
     }
   }
-  delay(1); //stability to prevent bouncing
 }
 
 //broadcast ID if applicable
@@ -195,8 +232,7 @@ void txAutoId(Radio &radio)
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
-    //kk4nde(micPin);
-    morseCode(radio.micPin,"kk4nde");
+    morseCode(radio.micPin,CALLSIGN);
     radio.lastIdTime=millis();
     digitalWrite(radio.pttPin,tx);
   }
@@ -206,7 +242,7 @@ void txAutoId(Radio &radio)
 void lowBattCheck(Radio &radio)
 {
   float voltage=getPowerVoltage(voltSensePin);
-  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > 9 && (millis()-radio.lastBattMonTime) > idTimeout)
+  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
   {
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
