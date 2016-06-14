@@ -27,34 +27,31 @@ Arduino pins
 ATTiny84 pins
 #define voltSensePin 4
   //set config for radio A
-  radioA.voxPin=2;
-  radioA.micPin=7;
-  radioA.pttPin=0;
+  radioA.voxPin=10;
+  radioA.micPin=9;
+  radioA.pttPin=8;
   radioA.autoId=true;  //0
-  radioA.battMon=false; //1
+  radioA.battMon=true; //1
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastVoxTime=0;
 
-  //set config for radio B
-  radioB.voxPin=1;
-  radioB.micPin=10;
-  radioB.pttPin=1;
-  radioB.autoId=true;  //2
-  radioB.battMon=true; //3
+  //set config for radio B  
+  radioB.voxPin=7;
+  radioB.micPin=6;
+  radioB.pttPin=5;
+  radioB.autoId=false;  //2
+  radioB.battMon=false; //3
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastVoxTime=0;
 */
 
 //Analog pin for voltage sense
-#define voltSensePin 6
+#define voltSensePin 4
 
 //define threshold for low battery
 #define lowBattThreshold 11.5
-
-//define threshold below which low battery is not triggered
-#define lowNotifyFloor 9.5
 
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
@@ -65,9 +62,6 @@ ATTiny84 pins
 
 //define deviation to activate VOX
 #define devVal 4
-
-//define delay for VOX hold
-#define voxDelay 1000
 
 //morse code "dit" base unit length in milliseconds
 #define ditLen 60
@@ -97,22 +91,21 @@ boolean isBusy(Radio &radio);
 
 void setup() {
   
-  //set config for radio A
-  radioA.voxPin=2;
-  radioA.micPin=7;
-  radioA.pttPin=0;
+  radioA.voxPin=5;
+  radioA.micPin=8;
+  radioA.pttPin=9;
   radioA.autoId=true;  //0
-  radioA.battMon=false; //1
+  radioA.battMon=true; //1
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastVoxTime=0;
 
   //set config for radio B
-  radioB.voxPin=1;
-  radioB.micPin=10;
-  radioB.pttPin=1;
-  radioB.autoId=true;  //2
-  radioB.battMon=true; //3
+  radioB.voxPin=6;
+  radioB.micPin=7;
+  radioB.pttPin=3;
+  radioB.autoId=false;  //2
+  radioB.battMon=false; //3
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastVoxTime=0;
@@ -182,7 +175,7 @@ void vox(Radio &radio)
   }
   else
   {
-    if(millis()-radio.lastVoxTime < voxDelay)
+    if(millis()-radio.lastVoxTime < 500)
     {
       //vox delay
     }
@@ -191,6 +184,7 @@ void vox(Radio &radio)
       digitalWrite(radio.pttPin,LOW);
     }
   }
+  delay(1); //stability to prevent bouncing
 }
 
 //broadcast ID if applicable
@@ -212,7 +206,7 @@ void txAutoId(Radio &radio)
 void lowBattCheck(Radio &radio)
 {
   float voltage=getPowerVoltage(voltSensePin);
-  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
+  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > 9 && (millis()-radio.lastBattMonTime) > idTimeout)
   {
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
