@@ -176,163 +176,255 @@ void morseCode(int codePin, String message)
 {
   // message.trim();
   message.toLowerCase();
-  char temp[6];
+  int code;
+  int length;
    for(unsigned int x=0; x < message.length(); x++)
    {
      switch(message[x])
      {
        case 'a':
-                 strcpy(temp,".-");
+                 //strcpy(temp,".-");
+                 code=B01;
+                 length=2;
                  break;
        case 'b':
-                 strcpy(temp,"-...");
+                 //strcpy(temp,"-...");
+                 code=B1000;
+                 length=4;
                  break;
        case 'c':
-                 strcpy(temp,"-.-.");
+                 //strcpy(temp,"-.-.");
+                 code=B1010;
+                 length=4;
                  break;
        case 'd':
-                 strcpy(temp,"-..");
+                 //strcpy(temp,"-..");
+                 code=B100;
+                 length=3;
                  break;
        case 'e':
-                 strcpy(temp,".");
+                 //strcpy(temp,".");
+                 code=B0;
+                 length=1;
                  break;
        case 'f':
-                 strcpy(temp,"..-.");
+                 //strcpy(temp,"..-.");
+                 code=B0010;
+                 length=4;
                  break;
        case 'g':
-                 strcpy(temp,"--.");
+                 //strcpy(temp,"--.");
+                 code=B110;
+                 length=3;
                  break;
        case 'h':
-                 strcpy(temp,"....");
+                 //strcpy(temp,"....");
+                 code=B0000;
+                 length=4;
                  break;
        case 'i':
-                 strcpy(temp,"..");
+                 //strcpy(temp,"..");
+                 code=B00;
+                 length=2;
                  break;
        case 'j':
-                 strcpy(temp,".---");
+                 //strcpy(temp,".---");
+                 code=B0111;
+                 length=4;
                  break;
        case 'k':
-                 strcpy(temp,"-.-");
+                 //strcpy(temp,"-.-");
+                 code=B101;
+                 length=3;
                  break;
        case 'l':
-                 strcpy(temp,".-..");
+                 //strcpy(temp,".-..");
+                 code=B0100;
+                 length=4;
                  break;
        case 'm':
-                 strcpy(temp,"--");
+                 //strcpy(temp,"--");
+                 code=B11;
+                 length=2;
                  break;
        case 'n':
-                 strcpy(temp,"-.");
+                 //strcpy(temp,"-.");
+                 code=B10;
+                 length=2;
                  break;
        case 'o':
-                 strcpy(temp,"---");
+                 //strcpy(temp,"---");
+                 code=B111;
+                 length=3;
                  break;
        case 'p':
-                 strcpy(temp,".--.");
+                 //strcpy(temp,".--.");
+                 code=B0110;
+                 length=4;
                  break;
        case 'q':
-                 strcpy(temp,"--.-");
+                 //strcpy(temp,"--.-");
+                 code=B1101;
+                 length=4;
                  break;
        case 'r':
-                 strcpy(temp,".-.");
+                 //strcpy(temp,".-.");
+                 code=B010;
+                 length=3;
                  break;
        case 's':
-                 strcpy(temp,"...");
+                 //strcpy(temp,"...");
+                 code=B000;
+                 length=3;
                  break;
        case 't':
-                 strcpy(temp,"-");
+                 //strcpy(temp,"-");
+                 code=B1;
+                 length=1;
                  break;
        case 'u':
-                 strcpy(temp,"..-");
+                 //strcpy(temp,"..-");
+                 code=B001;
+                 length=3;
                  break;
        case 'v':
-                 strcpy(temp,"...-");
+                 //strcpy(temp,"...-");
+                 code=B0001;
+                 length=4;
                  break;
        case 'w':
-                 strcpy(temp,".--");
+                 //strcpy(temp,".--");
+                 code=B011;
+                 length=3;
                  break;
        case 'x':
-                 strcpy(temp,"-..-");
+                 //strcpy(temp,"-..-");
+                 code=B1001;
+                 length=4;
                  break;
        case 'y':
-                 strcpy(temp,"-.--");
+                 //strcpy(temp,"-.--");
+                 code=B1011;
+                 length=4;
                  break;
        case 'z':
-                 strcpy(temp,"--..");
+                 //strcpy(temp,"--..");
+                 code=B1100;
+                 length=4;
                  break;
        case '0':
-                 strcpy(temp,"-----");
+                 //strcpy(temp,"-----");
+                 code=B11111;
+                 length=5;
                  break;
        case '1':
-                 strcpy(temp,".----");
+                 //strcpy(temp,".----");
+                 code=B01111;
+                 length=5;
                  break;
        case '2':
-                 strcpy(temp,"..---");
+                 //strcpy(temp,"..---");
+                 code=B00111;
+                 length=5;
                  break;
        case '3':
-                 strcpy(temp,"...--");
+                 //strcpy(temp,"...--");
+                 code=B00011;
+                 length=5;
                  break;
        case '4':
-                 strcpy(temp,"....-");
+                 //strcpy(temp,"....-");
+                 code=B00001;
+                 length=5;
                  break;
        case '5':
-                 strcpy(temp,".....");
+                 //strcpy(temp,".....");
+                 code=B00000;
+                 length=5;
                  break;
        case '6':
-                 strcpy(temp,"-....");
+                 //strcpy(temp,"-....");
+                 code=B10000;
+                 length=5;
                  break;
        case '7':
-                 strcpy(temp,"--...");
+                 //strcpy(temp,"--...");
+                 code=B11000;
+                 length=5;
                  break;
        case '8':
-                 strcpy(temp,"---..");
+                 //strcpy(temp,"---..");
+                 code=B11100;
+                 length=5;
                  break;
        case '9':
-                 strcpy(temp,"----.");
+                 //strcpy(temp,"----.");
+                 code=B11110;
+                 length=5;
                  break;
        case ' ':
-                 strcpy(temp,"");
+                 //strcpy(temp,"");
+                 code=B0;
+                 length=0;
                  delay(7*ditLen);
                  break;
        case '.':
-                 strcpy(temp,".-.-.-");
+                 //strcpy(temp,".-.-.-");
+                 code=B010101;
+                 length=6;
                  break;
        case '/':
-                 strcpy(temp,"-..-.");
+                 //strcpy(temp,"-..-.");
+                 code=B10010;
+                 length=5;
                  break;
        case '-':
-                 strcpy(temp,"-....-");
+                 //strcpy(temp,"-....-");
+                 code=B10001;
+                 length=6;
                  break;
        case '?':
-                 strcpy(temp,"..--..");
+                 //strcpy(temp,"..--..");
+                 code=B001100;
+                 length=6;
                  break;
        default:
-                 strcpy(temp,"");
+                 //strcpy(temp,"");
+                 code=B0;
+                 length=0;
                  break;
      }
      
-     for(unsigned int y=0; y < strlen(temp); y++)
+     while(length != 0)
      {
-       switch(temp[y])
+       if(code & bitMask(length))
        {
-       case '.':
-                 tone(codePin,tonePitch);
-                 delay(ditLen);
-                 noTone(codePin);
-                 delay(ditLen);
-                 break;
-       case '-':
                  tone(codePin,tonePitch);
                  delay(3*ditLen);
                  noTone(codePin);
                  delay(ditLen);
-                 break;
-       default:
+       }
+       else
+       {
+                 tone(codePin,tonePitch);
+                 delay(ditLen);
+                 noTone(codePin);
+                 delay(ditLen);
                  break;
        }
+       length--;
      }
      delay(ditLen);
    }
    delay(7*ditLen);
+}
+
+int bitMask(int bitNumber)
+{
+  int value=1;
+  for(int x=1; x < bitNumber; x++)
+    value*=2;
+  return value;
 }
 
 float getPowerVoltage(int pin)
