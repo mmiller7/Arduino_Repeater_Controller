@@ -1,61 +1,26 @@
-//VOX sensing bi-directional repeater for Arduino
+//COS sensing bi-directional repeater for Arduino
 //Matthew Miller
 //KK4NDE
-//24-March-2013
+//17-Sept-2016
+//This is based on the VOX repeater sketch but modified for more reliable use
+//by interfaceing radios equipped with carrier-operated squealch output.
+//DISCLAIMER: This code has not been personally tested for operation but is
+//based off working code only changing the detection parameters and renaming
+//a few variables.  Use at your own risk.
 
 //Here are some common pins you may want to use depending on if you have an Arduino or ATTINY
 //configure the #define at the beginning of the code
 //configure the radioA.value radioB.value lines in the setup() function
-//NOTE: voltSensePin, radioA.voxPin, and radioB.voxPin should be ANALOG inputs
+//NOTE: voltSensePin, radioA.cosPin, and radioB.cosPin should be DIGITAL inputs
 //if you don't want to use the voltSensePin just tie that pin to +V and it will always assume the battery is full
-/*
-Arduino pins
-#define voltSensePin 2
-  //set config for radio A
-  radioA.voxPin=0;
-  radioA.micPin=2;
-  radioA.pttPin=3;
-  radioA.autoId=true;
-  radioA.battMon=true;
-  radioA.lastBattMonTime=idTimeout;
-  radioA.lastIdTime=idTimeout;
-  radioA.lastVoxTime=0;
-
-  //set config for radio B  
-  radioB.voxPin=1;
-  radioB.micPin=12;
-  radioB.pttPin=13;
-  radioB.autoId=false;
-  radioB.battMon=false;
-  radioB.lastBattMonTime=idTimeout;
-  radioB.lastIdTime=idTimeout;
-  radioB.lastVoxTime=0;
-
-ATTiny84 pins
-#define voltSensePin 4
-  //set config for radio A
-  radioA.voxPin=2;
-  radioA.micPin=7;
-  radioA.pttPin=0;
-  radioA.autoId=true;  //0
-  radioA.battMon=false; //1
-  radioA.lastBattMonTime=idTimeout;
-  radioA.lastIdTime=idTimeout;
-  radioA.lastVoxTime=0;
-
-  //set config for radio B
-  radioB.voxPin=1;
-  radioB.micPin=10;
-  radioB.pttPin=1;
-  radioB.autoId=true;  //2
-  radioB.battMon=true; //3
-  radioB.lastBattMonTime=idTimeout;
-  radioB.lastIdTime=idTimeout;
-  radioB.lastVoxTime=0;
-*/
 
 //Callsign to ID with, use lowercase only
 #define CALLSIGN "xx0xxx"
+
+//Sets the COS (Carrier Operated Squealch) value to represent "squealch open"
+//If your COS is +V when carrier present/squealch open, use HIGH
+//If your COS is 0V when carrier present/squealch open, use LOW
+#define COS_VALUE_SQL_OPEN LOW
 
 //Analog pin for voltage sense
 #define voltSensePin 6
@@ -64,23 +29,15 @@ ATTiny84 pins
 #define lowBattThreshold 11.5
 
 //define threshold below which low battery is not triggered
+//this lets you power it with low-voltage and not get any alerts
 #define lowNotifyFloor 9.5
 
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
 #define idTimeout 600000
 
-//define input value for no-audio
-//this should probably be near 512 but will vary depending on your voltage devider
-//that is used for buffering the voxPin input
-#define normVal 511
-
-//define deviation to activate VOX
-//smaller values activate sooner, larger values require more audio variation to trigger
-#define devVal 4
-
-//define delay for VOX hold over in milliseconds
-#define voxDelay 1000
+//define delay for squealch-tail hold over in milliseconds
+#define cosDelay 1000
 
 //morse code "dit" base unit length in milliseconds
 #define ditLen 60
@@ -91,11 +48,11 @@ ATTiny84 pins
 //data structure for radio info
 struct Radio
 {
-  //voxPin - Audio In (for VOX) - Analog Pin
+  //cosPin - Audio In (for COS) - Digital Pin
   //micPin - MIC Mix (for tone) - Digital Pin
   //pttPin - PTT OUT (for TX)   - Digital Pin
-  int micPin, pttPin, voxPin, autoId, battMon;
-  long lastBattMonTime, lastIdTime, lastVoxTime;
+  int micPin, pttPin, cosPin, autoId, battMon;
+  long lastBattMonTime, lastIdTime, lastCosTime;
 };
 
 //globals to store radio config
@@ -103,7 +60,7 @@ Radio radioA, radioB;
 
 //declarations for functions which use radio struct
 void configure(Radio &radio);
-void vox(Radio &radio);
+void cosCheck(Radio &radio);
 void txAutoId(Radio &radio);
 void lowBattCheck(Radio &radio);
 boolean isBusy(Radio &radio);
@@ -115,44 +72,28 @@ void setup() {
   ******************************************************/
   
   //set config for radio A
-  radioA.voxPin=2;
+  radioA.cosPin=2;
   radioA.micPin=7;
   radioA.pttPin=0;
   radioA.autoId=true;
   radioA.battMon=false;
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
-  radioA.lastVoxTime=0;
+  radioA.lastCosTime=0;
 
   //set config for radio B
-  radioB.voxPin=1;
+  radioB.cosPin=1;
   radioB.micPin=10;
   radioB.pttPin=1;
   radioB.autoId=true;
   radioB.battMon=true;
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
-  radioB.lastVoxTime=0;
+  radioB.lastCosTime=0;
   
   //apply config for radios (set pinmode/etc)
   configure(radioA);
   configure(radioB);
-  
-  //This line is for debugging on ATTINY without eating memory and resources nor
-  //requiring a serial console.  Use Serial.print for Arduino Uno instead.
-  //When uncommented, it will use the radioA output to beep out the values
-  //devided by 4 that are detected on voxPin on radioA followed by voxPin on radioB
-  //encoded in binary -- such that dit is 0 dah is 1
-  //the value is one byte long and should be multiplied by 4 to get the proper value
-  //to set for the #define normValue
-  //example, ..------..-----.
-  //         0111111110000000
-  //         \__127_/\__128_/
-  //          x4=508  x4=512
-  //          radioA "no sound" vox pin value is about 508
-  //          radioB "no sound" vox pin is about 512
-  
-  //morseCode(radioA.micPin,"@%");
   
   //broadcast ID if applicable
   txAutoId(radioA);
@@ -174,14 +115,14 @@ void loop()
   {
     lowBattCheck(radioA);
     txAutoId(radioA);
-    vox(radioA);
+    cosCheck(radioA);
   }
     
   if(!isBusy(radioA)) //if the other radio is transmitting, this one must be receiving so don't key up 
   {
     lowBattCheck(radioB);
     txAutoId(radioB);
-    vox(radioB);
+    cosCheck(radioB);
   }
 }
 
@@ -198,24 +139,22 @@ boolean isEnabled(int pin)
   //return digitalRead(pin);
 }
 
-//trigger PTT based on VOX input and delay
-void vox(Radio &radio)
+//trigger PTT based on COS input and delay
+void cosCheck(Radio &radio)
 {
-  // read the input on analog pins
-  int voxVal = analogRead(radio.voxPin);
   
-  // test if the pin has audio
-  if(voxVal>(normVal+devVal) || voxVal<(normVal-devVal))
+  // test if the pin has cos
+  if(digitalRead(radio.cosPin) == COS_VALUE_SQL_OPEN)
   {
-    //vox active
+    //cos active
     digitalWrite(radio.pttPin,HIGH);
-    radio.lastVoxTime=millis();
+    radio.lastCosTime=millis();
   }
   else
   {
-    if(millis()-radio.lastVoxTime < voxDelay)
+    if(millis()-radio.lastCosTime < cosDelay)
     {
-      //vox delay
+      //cos delay
     }
     else
     {
@@ -504,12 +443,12 @@ void morseCode(int codePin, char* message)
                  length=6;
                  break;
        case '@': //debug symbol
-                 code=analogRead(radioA.voxPin)/4;
-                 length=8;
+                 code=0;
+                 length=0;
                  break;
        case '%': //debug symbol
-                 code=analogRead(radioB.voxPin)/4;
-                 length=8;
+                 code=0;
+                 length=0;
                  break;
        default:
                  //strcpy(temp,"");
