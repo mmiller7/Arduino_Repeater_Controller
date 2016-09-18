@@ -8,7 +8,8 @@
 //based off working code only changing the detection parameters and renaming
 //a few variables.  Use at your own risk.
 
-//Here are some common pins you may want to use depending on if you have an Arduino or ATTINY
+//I have provided example pin numbers that I think would work with the Arduino Uno,
+//they can be changed for other boards or ATTINY chips depending on your need.
 //configure the #define at the beginning of the code
 //configure the radioA.value radioB.value lines in the setup() function
 //NOTE: voltSensePin, radioA.cosPin, and radioB.cosPin should be DIGITAL inputs
@@ -23,7 +24,7 @@
 #define COS_VALUE_SQL_OPEN LOW
 
 //Analog pin for voltage sense
-#define voltSensePin 6
+#define voltSensePin 0
 
 //define threshold for low battery
 #define lowBattThreshold 11.5
@@ -72,9 +73,10 @@ void setup() {
   ******************************************************/
   
   //set config for radio A
+  //Note, these would all be "digital" pins
   radioA.cosPin=2;
-  radioA.micPin=7;
-  radioA.pttPin=0;
+  radioA.micPin=3;
+  radioA.pttPin=4;
   radioA.autoId=true;
   radioA.battMon=false;
   radioA.lastBattMonTime=idTimeout;
@@ -82,9 +84,10 @@ void setup() {
   radioA.lastCosTime=0;
 
   //set config for radio B
-  radioB.cosPin=1;
-  radioB.micPin=10;
-  radioB.pttPin=1;
+  //Note, these would all be "digital" pins
+  radioB.cosPin=5;
+  radioB.micPin=6;
+  radioB.pttPin=7;
   radioB.autoId=true;
   radioB.battMon=true;
   radioB.lastBattMonTime=idTimeout;
