@@ -2,6 +2,14 @@
 //Matthew Miller
 //KK4NDE
 //17-Sept-2016
+//
+//Changelog:
+//cos_repeater_generic - Matthew Miller 17 September 2016
+//  Initial version
+//cos_repeater_generic2 - Matthew Miller 10 December 2016
+//  Bugfix - changed COS function for clarity to match wiring
+//  Debug - added Serial deugging enabled with preprocessor flag
+
 //This is based on the VOX repeater sketch but modified for more reliable use
 //by interfaceing radios equipped with carrier-operated squealch output.
 //DISCLAIMER: This code has not been personally tested for operation but is
@@ -46,6 +54,11 @@
 //the pitch for the dit/dah tone used by the ID
 #define tonePitch 800
 
+//uncomment to enable serial debugging
+//#define ENABLE_DEBUG
+//#define ENABLE_DEBUG_COS_STATE
+//#define ENABLE_DEBUG_PTT
+
 //data structure for radio info
 struct Radio
 {
@@ -54,6 +67,9 @@ struct Radio
   //pttPin - PTT OUT (for TX)   - Digital Pin
   int micPin, pttPin, cosPin, autoId, battMon;
   long lastBattMonTime, lastIdTime, lastCosTime;
+  #ifdef ENABLE_DEBUG
+  String nametag;
+  #endif
 };
 
 //globals to store radio config
@@ -61,12 +77,16 @@ Radio radioA, radioB;
 
 //declarations for functions which use radio struct
 void configure(Radio &radio);
-void cosCheck(Radio &radio);
+void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio);
 void txAutoId(Radio &radio);
 void lowBattCheck(Radio &radio);
 boolean isBusy(Radio &radio);
+#ifdef ENABLE_DEBUG
+void printRadioState(Radio &radio);
+#endif
 
 void setup() {
+  Serial.begin(9600);
   
   /******************************************************
   ** Configure radio connection pins and settings here **
@@ -82,6 +102,9 @@ void setup() {
   radioA.lastBattMonTime=idTimeout;
   radioA.lastIdTime=idTimeout;
   radioA.lastCosTime=0;
+  #ifdef ENABLE_DEBUG
+  radioA.nametag="radioA";
+  #endif
 
   //set config for radio B
   //Note, these would all be "digital" pins
@@ -93,6 +116,9 @@ void setup() {
   radioB.lastBattMonTime=idTimeout;
   radioB.lastIdTime=idTimeout;
   radioB.lastCosTime=0;
+  #ifdef ENABLE_DEBUG
+  radioB.nametag="radioB";
+  #endif
   
   //apply config for radios (set pinmode/etc)
   configure(radioA);
@@ -101,11 +127,19 @@ void setup() {
   //broadcast ID if applicable
   txAutoId(radioA);
   txAutoId(radioB);
+
+  #ifdef ENABLE_DEBUG
+  printSetupDebug();
+  #endif
 }
 
 //configures pinmode and setup for radio
 void configure(Radio &radio)
 {
+  #ifdef ENABLE_DEBUG
+  Serial.print("Configuring ");
+  Serial.println(radio.nametag);
+  #endif
   pinMode(radio.micPin,OUTPUT);
   pinMode(radio.pttPin,OUTPUT);
   digitalWrite(radio.micPin,LOW);
@@ -118,50 +152,70 @@ void loop()
   {
     lowBattCheck(radioA);
     txAutoId(radioA);
-    cosCheck(radioA);
+    cosCheckAndRepeat(radioB,radioA);
   }
     
   if(!isBusy(radioA)) //if the other radio is transmitting, this one must be receiving so don't key up 
   {
     lowBattCheck(radioB);
     txAutoId(radioB);
-    cosCheck(radioB);
+    cosCheckAndRepeat(radioA,radioB);
   }
 }
 
 //checks if a radio's PTT pin is keyed
 boolean isBusy(Radio &radio)
 {
-  return digitalRead(radio.pttPin);
+  boolean isBusy = digitalRead(radio.pttPin);
+  #ifdef ENABLE_DEBUG_VERBOSE
+  Serial.print(radio.nametag);
+  Serial.print(" isBusy");
+  Serial.print("=");
+  Serial.println(isBusy);
+  #endif
+  return isBusy;
 }
 
 //checks if feature is enabled (if pin is true/false)
-boolean isEnabled(int pin)
+boolean isEnabled(boolean feature)
 {
-  return pin; //temp just return true/false coded
+  return feature; //temp just return true/false coded
   //return digitalRead(pin);
 }
 
 //trigger PTT based on COS input and delay
-void cosCheck(Radio &radio)
+void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio)
 {
   
   // test if the pin has cos
-  if(digitalRead(radio.cosPin) == COS_VALUE_SQL_OPEN)
+  if(digitalRead(rxRadio.cosPin) == COS_VALUE_SQL_OPEN)
   {
+    #ifdef ENABLE_DEBUG_COS_STATE
+    Serial.print("COS squealch open on ");
+    Serial.println(rxRadio.nametag);
+    #endif
+
     //cos active
-    digitalWrite(radio.pttPin,HIGH);
-    radio.lastCosTime=millis();
+    #ifdef ENABLE_DEBUG_PTT
+    Serial.print("Turning on TX for ");
+    Serial.println(txRadio.nametag);
+    #endif
+    digitalWrite(txRadio.pttPin,HIGH);
+    rxRadio.lastCosTime=millis();
   }
   else
   {
-    if(millis()-radio.lastCosTime < cosDelay)
+    if(millis()-rxRadio.lastCosTime < cosDelay)
     {
       //cos delay
     }
     else
     {
-      digitalWrite(radio.pttPin,LOW);
+      #ifdef ENABLE_DEBUG_PTT
+      Serial.print("Turning off TX for ");
+      Serial.println(txRadio.nametag);
+      #endif
+      digitalWrite(txRadio.pttPin,LOW);
     }
   }
 }
@@ -171,6 +225,11 @@ void txAutoId(Radio &radio)
 {
   if(isEnabled(radio.autoId) && (millis()-radio.lastIdTime) > idTimeout)
   {
+    #ifdef ENABLE_DEBUG
+    Serial.print("Sending autoID on ");
+    Serial.println(radio.nametag);
+    #endif
+  
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
@@ -186,6 +245,11 @@ void lowBattCheck(Radio &radio)
   float voltage=getPowerVoltage(voltSensePin);
   if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
   {
+    #ifdef ENABLE_DEBUG
+    Serial.print("Sending low-battery on ");
+    Serial.println(radio.nametag);
+    #endif
+  
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
@@ -505,3 +569,71 @@ float getPowerVoltage(int pin)
   //return ((analogRead(pin)/1023.0)*5.0) / (1000.0 / (2200.0 + 1000.0)) + 0.76 ;
   return (analogRead(pin)*0.0156402737047898) + 0.76; //simplified
 }
+
+
+#ifdef ENABLE_DEBUG
+void printSetupDebug()
+{
+  Serial.println("------ setup() complete ------");
+  printProgramConfig();
+  Serial.println("");
+  printRadioState(radioA);
+  Serial.println("");
+  printRadioState(radioB);
+  Serial.println("------------------------------");
+}
+
+void printProgramConfig()
+{
+  Serial.print("CALLSIGN=");
+  Serial.println(CALLSIGN);
+  Serial.print("COS_VALUE_SQL_OPEN=");
+  Serial.println(COS_VALUE_SQL_OPEN);
+  Serial.print("voltSensePin=");
+  Serial.println(voltSensePin);
+  Serial.print("lowBattThreshold=");
+  Serial.println(lowBattThreshold);
+  Serial.print("lowNotifyFloor=");
+  Serial.println(lowNotifyFloor);
+  Serial.print("idTimeout=");
+  Serial.print(idTimeout);
+  float idTimeoutSec=((float)idTimeout/1000);
+  Serial.print(" (");
+  Serial.print(idTimeoutSec);
+  Serial.println(" seconds)");
+  Serial.print("cosDelay=");
+  Serial.print("cosDelay");
+  Serial.println("ms");
+  Serial.print("ditLen=");
+  Serial.print(ditLen);
+  Serial.print("tonePitch");
+  Serial.print(tonePitch);
+}
+
+void printRadioState(Radio &radio)
+{
+  //cosPin - Audio In (for COS) - Digital Pin
+  //micPin - MIC Mix (for tone) - Digital Pin
+  //pttPin - PTT OUT (for TX)   - Digital Pin
+  Serial.print("Radio Setup debug: ");
+  Serial.println(radio.nametag);
+  Serial.print("memAddr=");
+  Serial.println(reinterpret_cast<int>(&radio));
+  Serial.print("micPin=");
+  Serial.println(radio.micPin);
+  Serial.print("pttPin=");
+  Serial.println(radio.pttPin);
+  Serial.print("cosPin=");
+  Serial.println(radio.cosPin);
+  Serial.print("autoId=");
+  Serial.println(radio.autoId);
+  Serial.print("battMon=");
+  Serial.println(radio.battMon);
+  Serial.print("lastBattMonTime=");
+  Serial.println(radio.lastBattMonTime);
+  Serial.print("lastIdTime=");
+  Serial.println(radio.lastIdTime);
+  Serial.print("lastCosTime=");
+  Serial.println(radio.lastCosTime);
+}
+#endif
