@@ -9,12 +9,12 @@
 //cos_repeater_generic2 - Matthew Miller 10 December 2016
 //  Bugfix - changed COS function for clarity to match wiring
 //  Debug - added Serial deugging enabled with preprocessor flag
+//cos_repeater_generic3 - Matthew Miller 10 December 2016
+//  Added flag to only ID if radio transmitted
+//  Cleaned up some code
 
 //This is based on the VOX repeater sketch but modified for more reliable use
 //by interfaceing radios equipped with carrier-operated squealch output.
-//DISCLAIMER: This code has not been personally tested for operation but is
-//based off working code only changing the detection parameters and renaming
-//a few variables.  Use at your own risk.
 
 //I have provided example pin numbers that I think would work with the Arduino Uno,
 //they can be changed for other boards or ATTINY chips depending on your need.
@@ -44,6 +44,7 @@
 //how many milliseconds to ID every
 //600000 is 10 minutes in milliseconds
 #define idTimeout 600000
+#define onlyIdAfterTx true
 
 //define delay for squealch-tail hold over in milliseconds
 #define cosDelay 1000
@@ -58,6 +59,8 @@
 //#define ENABLE_DEBUG
 //#define ENABLE_DEBUG_COS_STATE
 //#define ENABLE_DEBUG_PTT
+//#define ENABLE_DEBUG_RADIO_STATE
+//#define ENABLE_DEBUG_NEEDSID
 
 //data structure for radio info
 struct Radio
@@ -66,7 +69,10 @@ struct Radio
   //micPin - MIC Mix (for tone) - Digital Pin
   //pttPin - PTT OUT (for TX)   - Digital Pin
   int micPin, pttPin, cosPin, autoId, battMon;
-  long lastBattMonTime, lastIdTime, lastCosTime;
+  long lastBattMonTime=idTimeout,
+       lastIdTime=idTimeout,
+       lastCosTime=0;
+  boolean needsId=true;
   #ifdef ENABLE_DEBUG
   String nametag;
   #endif
@@ -81,8 +87,11 @@ void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio);
 void txAutoId(Radio &radio);
 void lowBattCheck(Radio &radio);
 boolean isBusy(Radio &radio);
+
+//some declarations for debugging
 #ifdef ENABLE_DEBUG
 void printRadioState(Radio &radio);
+long debugRadioStateLastTime=0;
 #endif
 
 void setup() {
@@ -99,9 +108,7 @@ void setup() {
   radioA.pttPin=4;
   radioA.autoId=true;
   radioA.battMon=false;
-  radioA.lastBattMonTime=idTimeout;
-  radioA.lastIdTime=idTimeout;
-  radioA.lastCosTime=0;
+  //for debugging only
   #ifdef ENABLE_DEBUG
   radioA.nametag="radioA";
   #endif
@@ -113,9 +120,7 @@ void setup() {
   radioB.pttPin=7;
   radioB.autoId=true;
   radioB.battMon=true;
-  radioB.lastBattMonTime=idTimeout;
-  radioB.lastIdTime=idTimeout;
-  radioB.lastCosTime=0;
+  //for debugging only
   #ifdef ENABLE_DEBUG
   radioB.nametag="radioB";
   #endif
@@ -161,6 +166,14 @@ void loop()
     txAutoId(radioB);
     cosCheckAndRepeat(radioA,radioB);
   }
+
+  #ifdef ENABLE_DEBUG_RADIO_STATE
+  if(millis()-debugRadioStateLastTime > 10000)
+  {
+    printAllRadioState();
+    debugRadioStateLastTime=millis();
+  }
+  #endif
 }
 
 //checks if a radio's PTT pin is keyed
@@ -201,6 +214,11 @@ void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio)
     Serial.println(txRadio.nametag);
     #endif
     digitalWrite(txRadio.pttPin,HIGH);
+    #ifdef ENABLE_DEBUG_NEEDSID
+    Serial.print(txRadio.nametag);
+    Serial.println("setting needsId=true in 'cos active' if clause");
+    #endif
+    txRadio.needsId=true;
     rxRadio.lastCosTime=millis();
   }
   else
@@ -208,6 +226,11 @@ void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio)
     if(millis()-rxRadio.lastCosTime < cosDelay)
     {
       //cos delay
+      #ifdef ENABLE_DEBUG_NEEDSID
+      Serial.print(txRadio.nametag);
+      Serial.println("setting needsId=true in 'cos delay' else-if clause");
+      #endif
+      txRadio.needsId=true;
     }
     else
     {
@@ -223,6 +246,14 @@ void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio)
 //broadcast ID if applicable
 void txAutoId(Radio &radio)
 {
+  //If we're only suppsoed to ID after TX
+  //and we didn't TX
+  if(onlyIdAfterTx && !radio.needsId)
+  {
+    //keep resetting the last ID time to now
+    radio.lastIdTime=millis();
+  }
+  
   if(isEnabled(radio.autoId) && (millis()-radio.lastIdTime) > idTimeout)
   {
     #ifdef ENABLE_DEBUG
@@ -234,6 +265,11 @@ void txAutoId(Radio &radio)
     digitalWrite(radio.pttPin,HIGH);
     delay(500);
     morseCode(radio.micPin,CALLSIGN);
+    #ifdef ENABLE_DEBUG_NEEDSID
+    Serial.print(radio.nametag);
+    Serial.println(" txAutoId setting needsId=false");
+    #endif
+    radio.needsId=false;
     radio.lastIdTime=millis();
     digitalWrite(radio.pttPin,tx);
   }
@@ -252,6 +288,7 @@ void lowBattCheck(Radio &radio)
   
     boolean tx=digitalRead(radio.pttPin);
     digitalWrite(radio.pttPin,HIGH);
+    radio.needsId=true;
     delay(500);
     
     //encode low battery morse code message
@@ -264,6 +301,7 @@ void lowBattCheck(Radio &radio)
     
     radio.lastBattMonTime=millis();
     digitalWrite(radio.pttPin,tx);
+    radio.needsId=true;
   }
 }
 
@@ -581,6 +619,19 @@ void printSetupDebug()
   Serial.println("");
   printRadioState(radioB);
   Serial.println("------------------------------");
+  debugRadioStateLastTime=millis();
+}
+
+void printAllRadioState()
+{
+  Serial.println("------ radio state ------");
+  Serial.print("millis=");
+  Serial.println(millis());
+  Serial.println("");
+  printRadioState(radioA);
+  Serial.println("");
+  printRadioState(radioB);
+  Serial.println("-------------------------");
 }
 
 void printProgramConfig()
@@ -605,9 +656,9 @@ void printProgramConfig()
   Serial.print("cosDelay");
   Serial.println("ms");
   Serial.print("ditLen=");
-  Serial.print(ditLen);
+  Serial.println(ditLen);
   Serial.print("tonePitch");
-  Serial.print(tonePitch);
+  Serial.println(tonePitch);
 }
 
 void printRadioState(Radio &radio)
@@ -615,7 +666,7 @@ void printRadioState(Radio &radio)
   //cosPin - Audio In (for COS) - Digital Pin
   //micPin - MIC Mix (for tone) - Digital Pin
   //pttPin - PTT OUT (for TX)   - Digital Pin
-  Serial.print("Radio Setup debug: ");
+  Serial.print("Radio state debug: ");
   Serial.println(radio.nametag);
   Serial.print("memAddr=");
   Serial.println(reinterpret_cast<int>(&radio));
@@ -635,5 +686,7 @@ void printRadioState(Radio &radio)
   Serial.println(radio.lastIdTime);
   Serial.print("lastCosTime=");
   Serial.println(radio.lastCosTime);
+  Serial.print("needsId=");
+  Serial.println(radio.needsId);
 }
 #endif
