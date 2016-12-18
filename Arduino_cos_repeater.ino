@@ -12,6 +12,9 @@
 //cos_repeater_generic3 - Matthew Miller 10 December 2016
 //  Added flag to only ID if radio transmitted
 //  Cleaned up some code
+//cos_repeater_generic4 - Matthew Miller 17 December 2016
+//  Added software-flag to disable a radio
+//  Fixed battMon flag changed int to boolean
 
 //This is based on the VOX repeater sketch but modified for more reliable use
 //by interfaceing radios equipped with carrier-operated squealch output.
@@ -68,11 +71,13 @@ struct Radio
   //cosPin - Audio In (for COS) - Digital Pin
   //micPin - MIC Mix (for tone) - Digital Pin
   //pttPin - PTT OUT (for TX)   - Digital Pin
-  int micPin, pttPin, cosPin, autoId, battMon;
+  int micPin, pttPin, cosPin, autoId;
   long lastBattMonTime=idTimeout,
        lastIdTime=idTimeout,
        lastCosTime=0;
-  boolean needsId=true;
+  boolean battMon=true,
+          needsId=true,
+          txAllowed=true;
   #ifdef ENABLE_DEBUG
   String nametag;
   #endif
@@ -108,6 +113,7 @@ void setup() {
   radioA.pttPin=4;
   radioA.autoId=true;
   radioA.battMon=false;
+  radioA.txAllowed=true;
   //for debugging only
   #ifdef ENABLE_DEBUG
   radioA.nametag="radioA";
@@ -119,7 +125,8 @@ void setup() {
   radioB.micPin=6;
   radioB.pttPin=7;
   radioB.autoId=true;
-  radioB.battMon=true;
+  radioB.battMon=false;
+  radioB.txAllowed=true;
   //for debugging only
   #ifdef ENABLE_DEBUG
   radioB.nametag="radioB";
@@ -153,14 +160,14 @@ void configure(Radio &radio)
 
 void loop()
 {
-  if(!isBusy(radioB)) //if the other radio is transmitting, this one must be receiving so don't key up
+  if(isEnabled(radioA.txAllowed) && !isBusy(radioB)) //if the other radio is transmitting, this one must be receiving so don't key up
   {
     lowBattCheck(radioA);
     txAutoId(radioA);
     cosCheckAndRepeat(radioB,radioA);
   }
     
-  if(!isBusy(radioA)) //if the other radio is transmitting, this one must be receiving so don't key up 
+  if(isEnabled(radioB.txAllowed) && !isBusy(radioA)) //if the other radio is transmitting, this one must be receiving so don't key up 
   {
     lowBattCheck(radioB);
     txAutoId(radioB);
@@ -190,6 +197,11 @@ boolean isBusy(Radio &radio)
 }
 
 //checks if feature is enabled (if pin is true/false)
+//  In the future this had some grand plan of making it
+//  take a pin # and then check if that pin was high
+//  or low depending on jumpers/switches but that didn't
+//  happen so now this just returns the feature-boolean
+//  stored in the radio object.
 boolean isEnabled(boolean feature)
 {
   return feature; //temp just return true/false coded
@@ -199,46 +211,48 @@ boolean isEnabled(boolean feature)
 //trigger PTT based on COS input and delay
 void cosCheckAndRepeat(Radio &rxRadio, Radio &txRadio)
 {
-  
-  // test if the pin has cos
-  if(digitalRead(rxRadio.cosPin) == COS_VALUE_SQL_OPEN)
+  if(isEnabled(txRadio.txAllowed))
   {
-    #ifdef ENABLE_DEBUG_COS_STATE
-    Serial.print("COS squealch open on ");
-    Serial.println(rxRadio.nametag);
-    #endif
-
-    //cos active
-    #ifdef ENABLE_DEBUG_PTT
-    Serial.print("Turning on TX for ");
-    Serial.println(txRadio.nametag);
-    #endif
-    digitalWrite(txRadio.pttPin,HIGH);
-    #ifdef ENABLE_DEBUG_NEEDSID
-    Serial.print(txRadio.nametag);
-    Serial.println("setting needsId=true in 'cos active' if clause");
-    #endif
-    txRadio.needsId=true;
-    rxRadio.lastCosTime=millis();
-  }
-  else
-  {
-    if(millis()-rxRadio.lastCosTime < cosDelay)
+    // test if the pin has cos
+    if(digitalRead(rxRadio.cosPin) == COS_VALUE_SQL_OPEN)
     {
-      //cos delay
+      #ifdef ENABLE_DEBUG_COS_STATE
+      Serial.print("COS squealch open on ");
+      Serial.println(rxRadio.nametag);
+      #endif
+  
+      //cos active
+      #ifdef ENABLE_DEBUG_PTT
+      Serial.print("Turning on TX for ");
+      Serial.println(txRadio.nametag);
+      #endif
+      digitalWrite(txRadio.pttPin,HIGH);
       #ifdef ENABLE_DEBUG_NEEDSID
       Serial.print(txRadio.nametag);
-      Serial.println("setting needsId=true in 'cos delay' else-if clause");
+      Serial.println("setting needsId=true in 'cos active' if clause");
       #endif
       txRadio.needsId=true;
+      rxRadio.lastCosTime=millis();
     }
     else
     {
-      #ifdef ENABLE_DEBUG_PTT
-      Serial.print("Turning off TX for ");
-      Serial.println(txRadio.nametag);
-      #endif
-      digitalWrite(txRadio.pttPin,LOW);
+      if(millis()-rxRadio.lastCosTime < cosDelay)
+      {
+        //cos delay
+        #ifdef ENABLE_DEBUG_NEEDSID
+        Serial.print(txRadio.nametag);
+        Serial.println("setting needsId=true in 'cos delay' else-if clause");
+        #endif
+        txRadio.needsId=true;
+      }
+      else
+      {
+        #ifdef ENABLE_DEBUG_PTT
+        Serial.print("Turning off TX for ");
+        Serial.println(txRadio.nametag);
+        #endif
+        digitalWrite(txRadio.pttPin,LOW);
+      }
     }
   }
 }
@@ -254,7 +268,7 @@ void txAutoId(Radio &radio)
     radio.lastIdTime=millis();
   }
   
-  if(isEnabled(radio.autoId) && (millis()-radio.lastIdTime) > idTimeout)
+  if(isEnabled(radio.txAllowed) && isEnabled(radio.autoId) && (millis()-radio.lastIdTime) > idTimeout)
   {
     #ifdef ENABLE_DEBUG
     Serial.print("Sending autoID on ");
@@ -279,7 +293,7 @@ void txAutoId(Radio &radio)
 void lowBattCheck(Radio &radio)
 {
   float voltage=getPowerVoltage(voltSensePin);
-  if(isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
+  if(isEnabled(radio.txAllowed) && isEnabled(radio.battMon) && voltage < lowBattThreshold && voltage > lowNotifyFloor && (millis()-radio.lastBattMonTime) > idTimeout)
   {
     #ifdef ENABLE_DEBUG
     Serial.print("Sending low-battery on ");
@@ -688,5 +702,7 @@ void printRadioState(Radio &radio)
   Serial.println(radio.lastCosTime);
   Serial.print("needsId=");
   Serial.println(radio.needsId);
+  Serial.print("txAllowed=");
+  Serial.println(radio.txAllowed);
 }
 #endif
